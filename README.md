@@ -2,6 +2,14 @@
 
 Mind Map is an Obsidian plugin for creating visual mind maps that remain readable Markdown notes. It supports automatic layout, keyboard-first editing, linked notes, connections, grouping, undo and redo, and image or PDF export.
 
+## Demo
+
+![Mind Map overview](images%20demo/overview.png)
+![Mind Map guide](images%20demo/Guide.png)
+![Add a note to a node](images%20demo/Add%20note%20on%20Node.png)
+![Connect nodes](images%20demo/Connect.png)
+![Export a mind map](images%20demo/Download.png)
+
 ## Features
 
 - Create and edit mind maps inside Obsidian
