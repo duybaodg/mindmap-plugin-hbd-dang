@@ -1,5 +1,7 @@
 # Mind Map
 
+[Tiếng Việt](README.vi.md)
+
 Mind Map is an Obsidian plugin for creating visual mind maps that remain readable Markdown notes. It supports automatic layout, keyboard-first editing, linked notes, connections, grouping, undo and redo, and image or PDF export.
 
 ## Demo
