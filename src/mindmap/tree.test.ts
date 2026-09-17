@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import * as assert from "node:assert/strict";
 import { MindMapData } from "./models";
+import { CommandHistory } from "./history";
 import {
     addChildNode,
     cloneMindMap,
@@ -68,4 +69,18 @@ test("clones mind maps without sharing nested objects", () => {
 
     cloned.root.children[0].content = "Changed";
     assert.equal(data.root.children[0].content, "A");
+});
+
+test("undoes and redoes with one snapshot per history entry", () => {
+    const history = new CommandHistory();
+    let data = fixture();
+
+    assert.equal(history.execute(data, () => renameNode(data.root, "a", "Alpha")), true);
+    assert.equal(data.root.children[0].content, "Alpha");
+
+    data = history.undo(data)!;
+    assert.equal(data.root.children[0].content, "A");
+
+    data = history.redo(data)!;
+    assert.equal(data.root.children[0].content, "Alpha");
 });

@@ -59,15 +59,6 @@ function normalizeMindMap(data: unknown): MindMapData | null {
 }
 
 function migrateMindMap(data: MindMapData): MindMapData {
-    if (!data.version || data.version === "1.0") {
-        return {
-            ...data,
-            version: CURRENT_VERSION,
-            connections: data.connections ?? [],
-            view: data.view ?? { ...DEFAULT_VIEW_STATE, pan: { ...DEFAULT_VIEW_STATE.pan } }
-        };
-    }
-
     return {
         ...data,
         version: CURRENT_VERSION,

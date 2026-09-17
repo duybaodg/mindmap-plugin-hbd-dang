@@ -34,6 +34,7 @@ const context = await esbuild.context({
         ...builtinModules],
     format: 'cjs',
     target: 'es2018',
+    minify: prod,
     logLevel: "info",
     sourcemap: prod ? false : 'inline',
     treeShaking: true,

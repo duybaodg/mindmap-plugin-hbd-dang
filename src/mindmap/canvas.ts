@@ -39,6 +39,7 @@ export class MindMapCanvas {
     private container: HTMLElement;
     private callbacks: MindMapCanvasCallbacks;
     private svgElement: SVGSVGElement | null = null;
+    private contentElement: SVGGElement | null = null;
     private positions: Map<string, LayoutPosition> = new Map();
     private nodeElements: Map<string, SVGGElement> = new Map();
     private visibleNodes: MindMapNode[] = [];
@@ -75,10 +76,9 @@ export class MindMapCanvas {
         this.connectSourceId = connectSourceId;
         this.mergeSourceId = mergeSourceId;
         this.editingNodeId = editingNodeId;
-        this.pan = pan;
 
         this.createSVG();
-        this.updateViewBox(zoom);
+        this.updateViewport(zoom, pan);
         this.renderEdges(root);
         this.renderConnections(connections);
         this.renderNodes(root, new Set(selectedNodeIds));
@@ -100,7 +100,15 @@ export class MindMapCanvas {
         }
 
         this.svgElement.innerHTML = "";
+        this.contentElement = activeDocument.createElementNS("http://www.w3.org/2000/svg", "g");
+        this.svgElement.appendChild(this.contentElement);
         this.nodeElements.clear();
+    }
+
+    updateViewport(zoom: number, pan: LayoutPosition): void {
+        this.pan = pan;
+        this.contentElement?.setAttribute("transform", `translate(${pan.x}, ${pan.y})`);
+        this.updateViewBox(zoom);
     }
 
     private getVisibleNodes(root: MindMapNode): MindMapNode[] {
@@ -189,28 +197,15 @@ export class MindMapCanvas {
     }
 
     private renderEdge(from: LayoutPosition, to: LayoutPosition): void {
-        if (!this.svgElement) return;
+        if (!this.contentElement) return;
 
-        const path = activeDocument.createElementNS("http://www.w3.org/2000/svg", "path");
-        const displayFrom = this.toDisplayPosition(from);
-        const displayTo = this.toDisplayPosition(to);
-        const startX = displayFrom.x + MindMapCanvas.NODE_WIDTH / 2;
-        const startY = displayFrom.y + MindMapCanvas.NODE_HEIGHT / 2;
-        const endX = displayTo.x - MindMapCanvas.NODE_WIDTH / 2;
-        const endY = displayTo.y + MindMapCanvas.NODE_HEIGHT / 2;
-        const controlOffset = Math.max(60, Math.abs(endX - startX) / 2);
-        const d = `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
-
-        path.setAttribute("d", d);
-        path.setAttribute("fill", "none");
-        path.setAttribute("stroke-width", "2");
+        const path = this.createEdgePath(from, to);
         path.setAttribute("class", "mindmap-edge");
-
-        this.svgElement.appendChild(path);
+        this.contentElement.appendChild(path);
     }
 
     private renderConnections(connections: MindMapConnection[]): void {
-        if (!this.svgElement) return;
+        if (!this.contentElement) return;
 
         for (const connection of connections) {
             const from = this.positions.get(connection.fromNodeId);
@@ -219,18 +214,16 @@ export class MindMapCanvas {
 
             const path = this.createEdgePath(from, to);
             path.setAttribute("class", "mindmap-edge mindmap-cross-connection");
-            this.svgElement.appendChild(path);
+            this.contentElement.appendChild(path);
         }
     }
 
     private createEdgePath(from: LayoutPosition, to: LayoutPosition): SVGPathElement {
         const path = activeDocument.createElementNS("http://www.w3.org/2000/svg", "path");
-        const displayFrom = this.toDisplayPosition(from);
-        const displayTo = this.toDisplayPosition(to);
-        const startX = displayFrom.x + MindMapCanvas.NODE_WIDTH / 2;
-        const startY = displayFrom.y + MindMapCanvas.NODE_HEIGHT / 2;
-        const endX = displayTo.x - MindMapCanvas.NODE_WIDTH / 2;
-        const endY = displayTo.y + MindMapCanvas.NODE_HEIGHT / 2;
+        const startX = from.x + MindMapCanvas.NODE_WIDTH / 2;
+        const startY = from.y + MindMapCanvas.NODE_HEIGHT / 2;
+        const endX = to.x - MindMapCanvas.NODE_WIDTH / 2;
+        const endY = to.y + MindMapCanvas.NODE_HEIGHT / 2;
         const controlOffset = Math.max(60, Math.abs(endX - startX) / 2);
         const d = `M ${startX} ${startY} C ${startX + controlOffset} ${startY}, ${endX - controlOffset} ${endY}, ${endX} ${endY}`;
 
@@ -251,7 +244,7 @@ export class MindMapCanvas {
     }
 
     private renderNode(node: MindMapNode, isSelected: boolean): void {
-        if (!this.svgElement) return;
+        if (!this.contentElement) return;
 
         const pos = this.positions.get(node.id);
         if (!pos) return;
@@ -375,7 +368,7 @@ export class MindMapCanvas {
 
         g.appendChild(remove);
 
-        this.svgElement.appendChild(g);
+        this.contentElement.appendChild(g);
         this.nodeElements.set(node.id, g);
     }
 
@@ -667,10 +660,9 @@ export class MindMapCanvas {
     }
 
     private setNodeTransform(element: SVGGElement, position: LayoutPosition): void {
-        const displayPosition = this.toDisplayPosition(position);
         element.setAttribute(
             "transform",
-            `translate(${displayPosition.x - MindMapCanvas.NODE_WIDTH / 2}, ${displayPosition.y})`
+            `translate(${position.x - MindMapCanvas.NODE_WIDTH / 2}, ${position.y})`
         );
     }
 
@@ -780,6 +772,7 @@ export class MindMapCanvas {
         this.nodeElements.clear();
         this.positions.clear();
         this.visibleNodes = [];
+        this.contentElement = null;
         this.dragState = null;
         this.boxSelectState = null;
         this.resetClickState();

@@ -61,6 +61,7 @@ export class MindMapView extends ItemView {
     private autosaveTimer: number | null = null;
     private statusEl: HTMLElement | null = null;
     private minimapEl: HTMLElement | null = null;
+    private minimapTransform: { scale: number; tx: number; ty: number } | null = null;
     private isSpacePanPressed = false;
     private connectButtonEl: HTMLButtonElement | null = null;
     private mergeButtonEl: HTMLButtonElement | null = null;
@@ -355,7 +356,9 @@ export class MindMapView extends ItemView {
         const focusNodeId = this.state.selectedNodeId ?? this.data?.root.id ?? null;
         this.state.zoom = newZoom;
         this.updatePersistedViewState();
-        this.render();
+        this.canvas?.updateViewport(newZoom, this.state.pan);
+        this.updateMinimapViewport();
+        this.updateStatus();
         if (focusNodeId && this.canvas) {
             this.canvas.centerNode(focusNodeId, newZoom);
         }
@@ -399,11 +402,10 @@ export class MindMapView extends ItemView {
         this.editingNodeId = null;
     }
 
-    private runCommand(label: string, mutate: () => boolean | void): boolean {
+    private runCommand(mutate: () => boolean | void): boolean {
         if (!this.data) return false;
 
-        const command = this.history.execute(label, this.data, mutate);
-        if (!command) return false;
+        if (!this.history.execute(this.data, mutate)) return false;
 
         this.render();
         this.scheduleAutosave();
@@ -411,7 +413,9 @@ export class MindMapView extends ItemView {
     }
 
     private undo(): void {
-        const previous = this.history.undo();
+        if (!this.data) return;
+
+        const previous = this.history.undo(this.data);
         if (!previous) return;
 
         this.data = previous;
@@ -427,7 +431,9 @@ export class MindMapView extends ItemView {
     }
 
     private redo(): void {
-        const next = this.history.redo();
+        if (!this.data) return;
+
+        const next = this.history.redo(this.data);
         if (!next) return;
 
         this.data = next;
@@ -469,7 +475,9 @@ export class MindMapView extends ItemView {
             y: Math.max(0, (viewport.height / this.state.zoom - bounds.height) / 2)
         };
         this.updatePersistedViewState();
-        this.render();
+        this.canvas.updateViewport(this.state.zoom, this.state.pan);
+        this.updateMinimapViewport();
+        this.updateStatus();
         this.scheduleAutosave();
     }
 
@@ -515,8 +523,8 @@ export class MindMapView extends ItemView {
                 x: this.panState.startPanX + event.clientX - this.panState.startX,
                 y: this.panState.startPanY + event.clientY - this.panState.startY
             };
-            this.updatePersistedViewState();
-            this.render();
+            this.canvas?.updateViewport(this.state.zoom, this.state.pan);
+            this.updateMinimapViewport();
         });
 
         const stopPanning = (event: PointerEvent): void => {
@@ -527,6 +535,7 @@ export class MindMapView extends ItemView {
             }
             canvasContainer.classList.remove("is-panning");
             this.panState = null;
+            this.updatePersistedViewState();
             this.scheduleAutosave();
         };
 
@@ -910,7 +919,7 @@ export class MindMapView extends ItemView {
         if (!node) return;
 
         new NodeNoteModal(this.app, node.content, node.note ?? "", (note) => {
-            this.runCommand("Edit node note", () => {
+            this.runCommand(() => {
                 if (!this.data) return false;
                 const current = findNode(this.data.root, nodeId);
                 if (!current) return false;
@@ -941,7 +950,7 @@ export class MindMapView extends ItemView {
         }
 
         const filePath = await this.createLinkedNoteFile(node);
-        this.runCommand("Link node note", () => {
+        this.runCommand(() => {
             if (!this.data) return false;
             const current = findNode(this.data.root, nodeId);
             if (!current) return false;
@@ -981,7 +990,7 @@ export class MindMapView extends ItemView {
     }
 
     private clearLinkedNote(nodeId: string): void {
-        this.runCommand("Remove linked note", () => {
+        this.runCommand(() => {
             if (!this.data) return false;
             const node = findNode(this.data.root, nodeId);
             if (!node || !node.linkedFilePath) return false;
@@ -1014,7 +1023,7 @@ export class MindMapView extends ItemView {
         }
 
         const newNode = createNode("New node", this.getChildPosition(parent));
-        this.runCommand("Add child", () => {
+        this.runCommand(() => {
             if (!this.data) return false;
             if (!addTreeChildNode(this.data.root, parentNodeId, newNode)) return false;
             this.state.selectedNodeId = newNode.id;
@@ -1036,7 +1045,7 @@ export class MindMapView extends ItemView {
         }
 
         const newNode = createNode("New node", this.getSiblingPosition(this.state.selectedNodeId));
-        this.runCommand("Add sibling", () => {
+        this.runCommand(() => {
             if (!this.data || !this.state.selectedNodeId) return false;
             if (!addTreeSiblingNode(this.data.root, this.state.selectedNodeId, newNode)) return false;
             this.state.selectedNodeId = newNode.id;
@@ -1078,7 +1087,7 @@ export class MindMapView extends ItemView {
             return;
         }
 
-        this.runCommand("Rename node", () => {
+        this.runCommand(() => {
             if (!this.data) return false;
             if (!renameTreeNode(this.data.root, nodeId, trimmed)) return false;
             this.state.selectedNodeId = nodeId;
@@ -1154,7 +1163,7 @@ export class MindMapView extends ItemView {
         const defaultName = ordered.map((node) => node.content).join(" + ");
 
         new TextInputModal(this.app, "Group node name", defaultName, (groupName) => {
-            this.runCommand("Group nodes", () => {
+            this.runCommand(() => {
                 if (!this.data) return false;
                 const groupNode = groupSiblingNodes(
                     this.data.root,
@@ -1174,7 +1183,7 @@ export class MindMapView extends ItemView {
     private autoLayout(): void {
         if (!this.data) return;
 
-        this.runCommand("Auto layout", () => {
+        this.runCommand(() => {
             if (!this.data) return false;
             clearPositions(this.data.root);
             this.connectSourceId = null;
@@ -1189,7 +1198,7 @@ export class MindMapView extends ItemView {
         const node = findNode(this.data.root, nodeId);
         if (!node) return;
 
-        this.runCommand("Move node", () => {
+        this.runCommand(() => {
             if (!this.data) return false;
             if (!moveTreeNode(this.data.root, nodeId, position)) return false;
             this.state.selectedNodeId = nodeId;
@@ -1211,7 +1220,7 @@ export class MindMapView extends ItemView {
             return;
         }
 
-        if (!this.runCommand("Reparent node", () => {
+        if (!this.runCommand(() => {
             if (!this.data) return false;
             if (!reparentTreeNode(this.data.root, nodeId, targetNodeId, position)) return false;
             this.state.selectedNodeId = nodeId;
@@ -1239,7 +1248,7 @@ export class MindMapView extends ItemView {
             return;
         }
 
-        if (!this.runCommand("Connect nodes", () => {
+        if (!this.runCommand(() => {
             if (!this.data) return false;
             const connections = this.data.connections ?? [];
             const exists = connections.some((connection) =>
@@ -1289,7 +1298,7 @@ export class MindMapView extends ItemView {
         const position = getGroupPosition(firstNode, secondNode);
         const defaultGroupName = this.getDefaultGroupName(firstNode, secondNode);
         new TextInputModal(this.app, "Merged node name", defaultGroupName, (groupName) => {
-            this.runCommand("Merge nodes", () => {
+            this.runCommand(() => {
                 if (!this.data) return false;
                 const groupNode = groupSiblingNodes(
                     this.data.root,
@@ -1342,7 +1351,7 @@ export class MindMapView extends ItemView {
 
         const parent = findParent(this.data.root, nodeId);
         if (parent) {
-            this.runCommand("Delete node", () => {
+            this.runCommand(() => {
                 if (!this.data) return false;
                 if (!deleteTreeNode(this.data.root, nodeId)) return false;
                 this.removeConnectionsForNode(nodeId);
@@ -1371,7 +1380,7 @@ export class MindMapView extends ItemView {
 
         const node = findNode(this.data.root, nodeId);
         if (node && node.children.length > 0) {
-            this.runCommand("Toggle collapse", () => {
+            this.runCommand(() => {
                 if (!this.data) return false;
                 if (!toggleTreeCollapse(this.data.root, nodeId)) return false;
                 this.state.selectedNodeId = node.id;
@@ -1389,7 +1398,7 @@ export class MindMapView extends ItemView {
         const base = parent.position ?? { x: 160, y: 72 };
         return {
             x: base.x + 240,
-            y: base.y + Math.max(parent.children.length, 0) * 88
+            y: base.y + parent.children.length * 88
         };
     }
 
@@ -1438,6 +1447,7 @@ export class MindMapView extends ItemView {
         const scale = Math.min((width - 16) / mapWidth, (height - 16) / mapHeight);
         const tx = 8 - minX * scale;
         const ty = 8 - minY * scale;
+        this.minimapTransform = { scale, tx, ty };
 
         this.minimapEl.empty();
         const svg = activeDocument.createElementNS("http://www.w3.org/2000/svg", "svg");
@@ -1487,6 +1497,18 @@ export class MindMapView extends ItemView {
         }
 
         this.minimapEl.appendChild(svg);
+    }
+
+    private updateMinimapViewport(): void {
+        const rect = this.minimapEl?.querySelector<SVGRectElement>(".mindmap-minimap-viewport");
+        const viewport = this.canvas?.getViewportSize();
+        if (!rect || !viewport || !this.minimapTransform) return;
+
+        const { scale, tx, ty } = this.minimapTransform;
+        rect.setAttribute("x", String(-this.state.pan.x * scale + tx));
+        rect.setAttribute("y", String(-this.state.pan.y * scale + ty));
+        rect.setAttribute("width", String(viewport.width / this.state.zoom * scale));
+        rect.setAttribute("height", String(viewport.height / this.state.zoom * scale));
     }
 
     private getVisibleNodes(root: MindMapNode): MindMapNode[] {

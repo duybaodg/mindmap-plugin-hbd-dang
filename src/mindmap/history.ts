@@ -1,45 +1,37 @@
 import { MindMapData } from "./models";
 import { cloneMindMap } from "./tree";
 
-export interface MindMapCommand {
-    label: string;
-    before: MindMapData;
-    after: MindMapData;
-}
-
 export class CommandHistory {
-    private undoStack: MindMapCommand[] = [];
-    private redoStack: MindMapCommand[] = [];
+    private undoStack: MindMapData[] = [];
+    private redoStack: MindMapData[] = [];
 
-    execute(label: string, data: MindMapData, mutate: () => boolean | void): MindMapCommand | null {
+    execute(data: MindMapData, mutate: () => boolean | void): boolean {
         const before = cloneMindMap(data);
         const result = mutate();
-        if (result === false) return null;
+        if (result === false) return false;
 
-        const after = cloneMindMap(data);
-        const command: MindMapCommand = { label, before, after };
-        this.undoStack.push(command);
+        this.undoStack.push(before);
         if (this.undoStack.length > 100) {
             this.undoStack.shift();
         }
         this.redoStack = [];
-        return command;
+        return true;
     }
 
-    undo(): MindMapData | null {
-        const command = this.undoStack.pop();
-        if (!command) return null;
+    undo(current: MindMapData): MindMapData | null {
+        const previous = this.undoStack.pop();
+        if (!previous) return null;
 
-        this.redoStack.push(command);
-        return cloneMindMap(command.before);
+        this.redoStack.push(cloneMindMap(current));
+        return previous;
     }
 
-    redo(): MindMapData | null {
-        const command = this.redoStack.pop();
-        if (!command) return null;
+    redo(current: MindMapData): MindMapData | null {
+        const next = this.redoStack.pop();
+        if (!next) return null;
 
-        this.undoStack.push(command);
-        return cloneMindMap(command.after);
+        this.undoStack.push(cloneMindMap(current));
+        return next;
     }
 
     clear(): void {

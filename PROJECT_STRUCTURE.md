@@ -8,7 +8,6 @@ A TypeScript-based Obsidian plugin for creating and managing mind maps. Built fo
 obsidian-plugin/
 ├── src/                     # Source code
 │   ├── main.ts             # Plugin entry point
-│   ├── settings.ts         # Plugin settings UI
 │   ├── commands/           # Command registration
 │   │   └── index.ts
 │   ├── storage/            # Data persistence
@@ -33,7 +32,7 @@ obsidian-plugin/
 ## Core Components
 
 ### `src/main.ts`
-Plugin lifecycle entry point. Registers the mindmap view, commands, ribbon icon, and settings tab with Obsidian's Plugin API.
+Plugin lifecycle entry point. Registers the mindmap view, commands, and ribbon icon with Obsidian's Plugin API.
 
 **Key exports:**
 - `MindMapPlugin` — Main plugin class extending `Plugin`
@@ -154,15 +153,6 @@ Registers Obsidian commands (global shortcuts, palette commands) with the app.
 
 ---
 
-### `src/settings.ts` — Settings UI
-
-Plugin settings tab in Obsidian settings. Currently minimal; extensible for user preferences.
-
-**Key class:**
-- `MindMapSettingTab` — Settings UI container
-
----
-
 ## Build Configuration
 
 ### `esbuild.config.mjs`
@@ -221,4 +211,3 @@ User Action (click/key)
 | `mindmap/models.ts` | TypeScript interfaces |
 | `storage/parser.ts` | Markdown YAML persistence |
 | `commands/index.ts` | Command registration |
-| `settings.ts` | Settings UI |
